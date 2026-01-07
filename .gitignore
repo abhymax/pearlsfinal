@@ -1,0 +1,6 @@
+error_log
+sessions/
+my_sessions/
+cgi-bin/
+*.zip
+
