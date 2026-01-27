@@ -1,45 +1,41 @@
 <?php
 // FILE: api.php
 header('Content-Type: application/json');
-
-// 1. Connect to Database
 require 'db_connect.php';
 
-// --- CONFIGURATION ---
-$doctor_email = "shivpandey94@gmail.com"; // Your email for notifications
-// ---------------------
+$doctor_email = "shivpandey94@gmail.com"; 
 
-// 2. Handle Form Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
-    // Sanitize Inputs
-    $name = htmlspecialchars(strip_tags(trim($_POST['name'] ?? '')));
-    $phone = htmlspecialchars(strip_tags(trim($_POST['phone'] ?? '')));
-    $service = htmlspecialchars(strip_tags(trim($_POST['service'] ?? '')));
-    $date = htmlspecialchars(strip_tags(trim($_POST['date'] ?? '')));
+    // 1. Sanitize Inputs
+    $name   = htmlspecialchars(strip_tags(trim($_POST['name'] ?? '')));
+    $phone  = htmlspecialchars(strip_tags(trim($_POST['phone'] ?? '')));
+    $email  = htmlspecialchars(strip_tags(trim($_POST['email'] ?? ''))); // New
+    $date   = htmlspecialchars(strip_tags(trim($_POST['date'] ?? '')));
+    $service= htmlspecialchars(strip_tags(trim($_POST['service'] ?? '')));
+    $reason = htmlspecialchars(strip_tags(trim($_POST['reason'] ?? ''))); // New
+    $source = htmlspecialchars(strip_tags(trim($_POST['source'] ?? 'General'))); // New
 
-    // Validation
+    // 2. Validation
     if(empty($name) || empty($phone)) {
         echo json_encode(["status" => "error", "message" => "Name and Phone are required."]);
         exit;
     }
 
-    // 3. Insert into Database
-    // Note: 'status' column is optional, defaulting to 'Pending' in DB usually
-    $stmt = $conn->prepare("INSERT INTO appointments (patient_name, phone, service_type, preferred_date) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("ssss", $name, $phone, $service, $date);
+    // 3. Insert into Database (Updated Query)
+    $stmt = $conn->prepare("INSERT INTO appointments (patient_name, phone, email, preferred_date, service_type, reason, booking_source) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("sssssss", $name, $phone, $email, $date, $service, $reason, $source);
 
     if ($stmt->execute()) {
-        
-        // 4. Send Email Notification (Optional - works if server supports mail)
-        $subject = "New Appointment: $name";
-        $msg = "New Booking:\nName: $name\nPhone: $phone\nService: $service\nDate: $date";
+        // Email Notification
+        $subject = "New Booking ($source): $name";
+        $msg = "New Appointment:\n\nName: $name\nPhone: $phone\nEmail: $email\nDate: $date\nService: $service\nSource: $source\nReason: $reason";
         $headers = "From: no-reply@pearlsshine.co.in";
         @mail($doctor_email, $subject, $msg, $headers);
 
         echo json_encode(["status" => "success", "message" => "Booking Confirmed!"]);
     } else {
-        echo json_encode(["status" => "error", "message" => "Database Error: " . $conn->error]);
+        echo json_encode(["status" => "error", "message" => "Database Error."]);
     }
     
     $stmt->close();

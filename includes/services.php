@@ -20,8 +20,9 @@
                     // First item is active by default
                     $activeClass = ($i === 0) ? "bg-white border-l-4 border-blue-600 text-blue-700 shadow-sm active-tab" : "text-slate-600 border-l-4 border-transparent hover:bg-slate-100";
                     
+                    // FIXED: Changed function name to switchServiceTab to avoid conflict
                     echo "
-                    <button type=\"button\" onclick=\"switchTab('$k', this)\" class=\"service-tab w-full text-left px-6 py-5 flex items-center gap-4 transition-all duration-300 border-b border-gray-100 $activeClass\" id=\"btn-$k\">
+                    <button type=\"button\" onclick=\"switchServiceTab('$k', this)\" class=\"service-tab w-full text-left px-6 py-5 flex items-center gap-4 transition-all duration-300 border-b border-gray-100 $activeClass\" id=\"btn-$k\">
                         <span class=\"material-symbols-outlined text-2xl opacity-80\">$icon</span>
                         <span class=\"font-bold text-sm uppercase tracking-wide\">$name</span>
                     </button>";
@@ -78,7 +79,8 @@
 </section>
 
 <script>
-function switchTab(key, btn) {
+// FIXED: Renamed function to switchServiceTab
+function switchServiceTab(key, btn) {
     // 1. Hide all content
     document.querySelectorAll('.service-content').forEach(el => el.classList.add('hidden'));
     
