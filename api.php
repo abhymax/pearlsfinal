@@ -2,10 +2,36 @@
 // FILE: api.php
 header('Content-Type: application/json');
 
-// 1. Load Config & PHPMailer
+// =======================================================================
+// 1. SAFETY NET (Debug Mode)
+// This catches "Invisible" crashes (like missing files) and shows them in the popup
+// =======================================================================
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error && ($error['type'] === E_ERROR || $error['type'] === E_PARSE || $error['type'] === E_COMPILE_ERROR)) {
+        // If the script crashed, tell the user WHY
+        echo json_encode(["status" => "error", "message" => "Critical Server Error: " . $error['message'] . " on line " . $error['line']]);
+        die();
+    }
+});
+// Turn off standard error printing so it doesn't break the JSON response
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
+
+// =======================================================================
+// 2. CHECK FILES BEFORE LOADING
+// =======================================================================
+if (!file_exists('config.php')) {
+    echo json_encode(["status" => "error", "message" => "Missing File: config.php"]); exit;
+}
 require 'config.php';
 
-// Adjust these paths if your 'phpmailer' folder is in a different location
+// Check for PHPMailer files
+if (!file_exists('phpmailer/PHPMailer.php')) {
+    echo json_encode(["status" => "error", "message" => "Missing Folder: 'phpmailer' folder not found. Please upload it."]); exit;
+}
+
 require 'phpmailer/Exception.php';
 require 'phpmailer/PHPMailer.php';
 require 'phpmailer/SMTP.php';
@@ -14,15 +40,11 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 use PHPMailer\PHPMailer\SMTP;
 
-// --- GMAIL SMTP SETTINGS ---
-// 1. The email account that will SEND the emails (The Doctor's Gmail)
+// =======================================================================
+// 3. YOUR GMAIL SETTINGS (Already Filled)
+// =======================================================================
 $smtp_user = 'shivpandey94@gmail.com'; 
-
-// 2. The Google App Password you generated (NOT the login password)
-// It looks like: abcd efgh ijkl mnop
-$smtp_pass = 'xkoj jnvv yych mzzm'; 
-
-// 3. Gmail Server Settings
+$smtp_pass = 'xkoj jnvv yych mzzm';   // Your App Password
 $smtp_host = 'smtp.gmail.com';
 $smtp_port = 465;
 $smtp_sec  = PHPMailer::ENCRYPTION_SMTPS;
@@ -49,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($stmt->execute()) {
         
+        // Setup Email
         $mail = new PHPMailer(true);
 
         try {
@@ -61,68 +84,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mail->SMTPSecure = $smtp_sec;
             $mail->Port       = $smtp_port;
 
-            // --- 1. EMAIL TO DOCTOR ---
-            // Gmail forces the sender to be your account ($smtp_user)
-            $mail->setFrom($smtp_user, 'Website Booking System'); 
-            $mail->addAddress($smtp_user);     // Send TO the doctor
-            
-            // If the patient provided an email, let the doctor reply to them directly
-            if(!empty($email)) {
-                $mail->addReplyTo($email, $name);
-            }
+            // --- SEND TO DOCTOR ---
+            $mail->setFrom($smtp_user, 'Website Booking'); 
+            $mail->addAddress($smtp_user); 
+            if(!empty($email)) { $mail->addReplyTo($email, $name); }
 
             $mail->isHTML(true);
             $mail->Subject = "🔔 New Booking: $name ($date)";
-            
             $mail->Body = "
-            <h2>New Appointment Request</h2>
-            <p><strong>Source:</strong> $source</p>
-            <table cellpadding='5' border='1' style='border-collapse:collapse; border-color: #ddd;'>
-                <tr><td><strong>Name:</strong></td><td>$name</td></tr>
-                <tr><td><strong>Phone:</strong></td><td><a href='tel:$phone'>$phone</a></td></tr>
-                <tr><td><strong>Email:</strong></td><td>$email</td></tr>
-                <tr><td><strong>Date:</strong></td><td>$date</td></tr>
-                <tr><td><strong>Service:</strong></td><td>$service</td></tr>
-                <tr><td><strong>Reason:</strong></td><td>$reason</td></tr>
-            </table>";
-            
+                <h3>New Appointment Request</h3>
+                <p><strong>Name:</strong> $name</p>
+                <p><strong>Phone:</strong> <a href='tel:$phone'>$phone</a></p>
+                <p><strong>Date:</strong> $date</p>
+                <p><strong>Service:</strong> $service</p>
+                <p><strong>Reason:</strong> $reason</p>
+                <p><strong>Source:</strong> $source</p>
+            ";
             $mail->send();
 
-            // --- 2. EMAIL TO PATIENT (Confirmation) ---
+            // --- SEND TO PATIENT ---
             if (!empty($email)) {
                 $mail->clearAddresses(); 
                 $mail->clearReplyTos();
-                
-                // Send FROM the doctor TO the patient
                 $mail->setFrom($smtp_user, 'Pearls Shine Dental');
                 $mail->addAddress($email); 
-                
-                $mail->Subject = "✅ We received your appointment request";
-                
+                $mail->Subject = "✅ Appointment Received";
                 $mail->Body = "
-                <div style='font-family: Arial, sans-serif; color: #333;'>
-                    <h2 style='color: #2563eb;'>Pearls Shine Dental</h2>
-                    <p>Hello <strong>$name</strong>,</p>
-                    <p>We have received your request for an appointment on <strong>$date</strong> for <strong>$service</strong>.</p>
-                    <p>Our team will review the schedule and call you at <strong>$phone</strong> shortly to confirm.</p>
-                    <br>
-                    <p>Need urgent help? Call us: <a href='tel:".val('phone')."'>".val('phone')."</a></p>
-                </div>";
-                
+                    <div style='font-family: sans-serif;'>
+                        <h2 style='color:#2563eb'>Pearls Shine Dental</h2>
+                        <p>Hello $name,</p>
+                        <p>We received your request for <strong>$service</strong> on <strong>$date</strong>.</p>
+                        <p>We will call you at <strong>$phone</strong> shortly to confirm.</p>
+                    </div>
+                ";
                 $mail->send();
             }
 
-            echo json_encode(["status" => "success", "message" => "Booking Confirmed!"]);
+            echo json_encode(["status" => "success", "message" => "Booking Confirmed! Check your email."]);
 
         } catch (Exception $e) {
-            // Log the error to a file on your server for debugging
-            error_log("Mailer Error: {$mail->ErrorInfo}");
-            // Still tell the user success because the database part worked
-            echo json_encode(["status" => "success", "message" => "Booking saved (Email notification pending)."]);
+            // If email fails, STILL tell the user success (because DB saved it), but warn them.
+            echo json_encode(["status" => "success", "message" => "Booking Saved, but Email Failed: " . $mail->ErrorInfo]);
         }
         
     } else {
-        echo json_encode(["status" => "error", "message" => "Database Error."]);
+        echo json_encode(["status" => "error", "message" => "Database Error: " . $conn->error]);
     }
     
     $stmt->close();

@@ -1,7 +1,9 @@
 <?php 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+// 1. SECURITY: Disable error display for production
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
+error_reporting(E_ALL); // Errors are logged to server logs, not shown to users
+
 require 'config.php'; 
 ?>
 <!DOCTYPE html>
@@ -10,7 +12,7 @@ require 'config.php';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pearls Shine Dental</title>
-    <link rel="icon" type="image/png" href="<?php echo val('logo'); ?>">
+    <link rel="icon" type="image/png" href="<?php echo esc('logo'); ?>">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;800&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
@@ -38,7 +40,7 @@ require 'config.php';
         .animate-marquee:hover { animation-play-state: paused; }
 
         /* =========================================
-           HERO ANIMATIONS (Added Here)
+           HERO ANIMATIONS
            ========================================= */
         @keyframes float {
             0%, 100% { transform: translateY(0); }
@@ -72,10 +74,14 @@ require 'config.php';
     </style>
 </head>
 <body class="bg-gray-50 text-slate-800">
-    <?php $clean_phone = preg_replace('/[^0-9]/', '', val('phone')); ?>
+    <?php 
+    // Phone cleaning is safe because it only keeps numbers
+    $clean_phone = preg_replace('/[^0-9]/', '', val('phone')); 
+    ?>
     
     <a href="tel:<?php echo $clean_phone; ?>" class="fixed bottom-6 left-6 z-[60] bg-blue-600 p-4 rounded-full shadow-2xl hover:scale-110 transition flex items-center justify-center text-white border-2 border-white animate-bounce"><span class="material-symbols-outlined text-2xl">call</span></a>
-    <a href="https://wa.me/<?php echo val('whatsapp'); ?>" class="fixed bottom-6 right-6 z-[60] bg-[#25D366] p-4 rounded-full shadow-2xl hover:scale-110 transition flex items-center justify-center text-white border-2 border-white"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" class="w-8 h-8"></a>
+    
+    <a href="https://wa.me/<?php echo esc('whatsapp'); ?>" class="fixed bottom-6 right-6 z-[60] bg-[#25D366] p-4 rounded-full shadow-2xl hover:scale-110 transition flex items-center justify-center text-white border-2 border-white"><img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" class="w-8 h-8"></a>
 
     <?php include 'includes/header.php'; ?>
     <?php include 'includes/hero.php'; ?>

@@ -1,44 +1,87 @@
 <?php require 'config.php';
-$ADMIN_USER = "admin"; $ADMIN_PASS = "Pearls@2025"; 
+
+// 1. ADMIN SECURITY SETUP
+$ADMIN_USER = "admin"; 
+
+// --- PASSWORD HASH SETUP (DO THIS ONCE) ---
+// 1. Uncomment the line below. 2. Refresh page. 3. Copy the code. 4. Paste it into $ADMIN_HASH. 5. Comment this line again.
+ //echo password_hash("Pearls@2025", PASSWORD_DEFAULT); exit;
+
+$ADMIN_HASH = '$2y$10$6dA2jVxaotp0LPZ00UXH0eef/SxZsIAXxP4r8OTELpnm42.C/Z3zi'; // Example: $2y$10$abcdef...
+
+// CSRF TOKEN GENERATION
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 if (isset($_GET['logout'])) { session_destroy(); echo "<script>location.href='admin.php';</script>"; exit; }
 $is_logged_in = (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true);
 
 // LOGIN HANDLER
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'login') {
-    if ($_POST['user'] === $ADMIN_USER && $_POST['pass'] === $ADMIN_PASS) { 
+    // 1. Verify CSRF
+    if (!hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '')) { die("CSRF Validation Failed. Please refresh."); }
+
+    // 2. Verify Password
+    if ($_POST['user'] === $ADMIN_USER && password_verify($_POST['pass'], $ADMIN_HASH)) { 
         $_SESSION['logged_in'] = true; 
         header("Location: admin.php"); 
         exit; 
+    } else {
+        $login_error = "Invalid Username or Password";
     }
 }
 
-// UPDATE HANDLERS (With Redirect to prevent Resubmission)
+// UPDATE HANDLERS
 if ($is_logged_in && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    
+    // Verify CSRF for ALL POST requests
+    if (!hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '')) { die("CSRF Validation Failed."); }
     
     // 1. Update Section Text/Images
     if (isset($_POST['action']) && $_POST['action'] === 'update_section') {
+        
+        // Use Prepared Statements (Fix SQL Injection)
+        $stmt = $conn->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?");
+        
         foreach ($_POST as $k => $v) {
-            if (in_array($k, ['action', 'section_name'])) continue;
-            $sk = $conn->real_escape_string($k); $sv = $conn->real_escape_string($v);
-            $conn->query("INSERT INTO site_settings (setting_key, setting_value) VALUES ('$sk', '$sv') ON DUPLICATE KEY UPDATE setting_value='$sv'");
+            if (in_array($k, ['action', 'section_name', 'csrf_token'])) continue;
+            
+            // Bind parameters securely
+            $stmt->bind_param("sss", $k, $v, $v);
+            $stmt->execute();
         }
+        $stmt->close();
         
         $target_dir = __DIR__ . '/assets/images/';
-        if (!file_exists($target_dir)) { mkdir($target_dir, 0777, true); }
+        if (!file_exists($target_dir)) { mkdir($target_dir, 0755, true); } // Changed to 0755 for better security
         
         foreach ($_FILES as $k => $f) {
             if ($f['error'] === UPLOAD_ERR_OK) {
+                
                 $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
-                if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) {
+                $allowed_ext = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+                
+                // SECURE FILE UPLOAD: Check MIME Type
+                $finfo = new finfo(FILEINFO_MIME_TYPE);
+                $mime = $finfo->file($f['tmp_name']);
+                $allowed_mime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+                if (in_array($ext, $allowed_ext) && in_array($mime, $allowed_mime)) {
                     $n = $k . '_' . time() . '.' . $ext;
                     if (move_uploaded_file($f['tmp_name'], $target_dir . $n)) {
                         $db_path = 'assets/images/' . $n;
-                        $conn->query("INSERT INTO site_settings (setting_key, setting_value) VALUES ('$k', '$db_path') ON DUPLICATE KEY UPDATE setting_value='$db_path'");
+                        
+                        // Update DB with new image path
+                        $stmt = $conn->prepare("INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?");
+                        $stmt->bind_param("sss", $k, $db_path, $db_path);
+                        $stmt->execute();
+                        $stmt->close();
                     }
                 }
             }
         }
-        // Set Flash Message and Redirect
+        
         $_SESSION['msg'] = "✅ " . htmlspecialchars($_POST['section_name']) . " updated successfully!";
         header("Location: admin.php");
         exit;
@@ -47,9 +90,14 @@ if ($is_logged_in && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // 2. Update Appointment Status
     if (isset($_POST['action']) && $_POST['action'] === 'update_status') {
         $id = intval($_POST['app_id']);
-        $status = $conn->real_escape_string($_POST['status']);
-        $conn->query("UPDATE appointments SET status='$status' WHERE id=$id");
-        $_SESSION['msg'] = "✅ Status updated to $status";
+        $status = $_POST['status'];
+        
+        $stmt = $conn->prepare("UPDATE appointments SET status=? WHERE id=?");
+        $stmt->bind_param("si", $status, $id);
+        $stmt->execute();
+        $stmt->close();
+        
+        $_SESSION['msg'] = "✅ Status updated to " . htmlspecialchars($status);
         header("Location: admin.php");
         exit;
     }
@@ -89,7 +137,6 @@ if ($is_logged_in) {
         .label { display: block; font-size: 12px; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; margin-top: 12px; }
         .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; }
         
-        /* Status Colors */
         .status-Pending { background-color: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
         .status-Contacted { background-color: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
         .status-Interested { background-color: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
@@ -117,6 +164,10 @@ if ($is_logged_in) {
                 <h2 class="text-2xl font-bold text-slate-800">Admin Login</h2>
                 <p class="text-slate-400 text-sm">Pearls Shine Dental Care</p>
             </div>
+            <?php if(isset($login_error)): ?>
+                <div class="bg-red-100 text-red-700 p-3 rounded text-sm text-center border border-red-200"><?php echo $login_error; ?></div>
+            <?php endif; ?>
+            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
             <input type="hidden" name="action" value="login">
             <div><label class="label">Username</label><input name="user" class="input-text" placeholder="Enter username"></div>
             <div><label class="label">Password</label><input type="password" name="pass" class="input-text" placeholder="Enter password"></div>
@@ -206,6 +257,7 @@ if ($is_logged_in) {
                                 <tr class="hover:bg-slate-50 transition">
                                     <td class="p-4 align-top">
                                         <form method="POST">
+                                            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                                             <input type="hidden" name="action" value="update_status">
                                             <input type="hidden" name="app_id" value="<?php echo $r['id']; ?>">
                                             <select name="status" onchange="updateStatus(this)" class="text-xs font-bold rounded-full px-3 py-1.5 cursor-pointer appearance-none focus:outline-none w-32 text-center shadow-sm <?php echo $statusClass; ?>">
@@ -222,24 +274,24 @@ if ($is_logged_in) {
                                     </td>
                                     <td class="p-4 align-top">
                                         <span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border <?php echo $srcBadge; ?>">
-                                            <span class="material-symbols-outlined text-[12px]"><?php echo $srcIcon; ?></span> <?php echo $source; ?>
+                                            <span class="material-symbols-outlined text-[12px]"><?php echo $srcIcon; ?></span> <?php echo htmlspecialchars($source); ?>
                                         </span>
                                     </td>
                                     <td class="p-4 align-top">
-                                        <div class="font-bold text-slate-800"><?php echo $r['patient_name']; ?></div>
-                                        <div class="text-xs text-slate-400 mt-1 flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">calendar_month</span> <?php echo $r['preferred_date']; ?></div>
+                                        <div class="font-bold text-slate-800"><?php echo htmlspecialchars($r['patient_name']); ?></div>
+                                        <div class="text-xs text-slate-400 mt-1 flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">calendar_month</span> <?php echo htmlspecialchars($r['preferred_date']); ?></div>
                                     </td>
                                     <td class="p-4 align-top">
-                                        <div class="font-mono text-xs font-bold text-slate-600"><?php echo $r['phone']; ?></div>
-                                        <div class="text-xs text-slate-400 mt-0.5 truncate max-w-[150px]" title="<?php echo isset($r['email'])?$r['email']:''; ?>">
-                                            <?php echo (isset($r['email']) && $r['email']) ? $r['email'] : '-'; ?>
+                                        <div class="font-mono text-xs font-bold text-slate-600"><?php echo htmlspecialchars($r['phone']); ?></div>
+                                        <div class="text-xs text-slate-400 mt-0.5 truncate max-w-[150px]" title="<?php echo isset($r['email'])?htmlspecialchars($r['email']):''; ?>">
+                                            <?php echo (isset($r['email']) && $r['email']) ? htmlspecialchars($r['email']) : '-'; ?>
                                         </div>
                                     </td>
                                     <td class="p-4 align-top">
-                                        <div class="text-sm font-bold text-slate-700"><?php echo $r['service_type']; ?></div>
+                                        <div class="text-sm font-bold text-slate-700"><?php echo htmlspecialchars($r['service_type']); ?></div>
                                         <?php if(!empty($r['reason'])): ?>
                                             <div class="text-xs text-slate-500 italic mt-1 bg-slate-100 p-2 rounded border border-slate-200">
-                                                "<?php echo $r['reason']; ?>"
+                                                "<?php echo htmlspecialchars($r['reason']); ?>"
                                             </div>
                                         <?php endif; ?>
                                     </td>
@@ -253,6 +305,7 @@ if ($is_logged_in) {
 
             <div id="hero" class="tab-content hidden">
                 <form method="POST" enctype="multipart/form-data" class="card p-6 space-y-4">
+                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                     <input type="hidden" name="action" value="update_section"><input type="hidden" name="section_name" value="Header & Hero">
                     <h2 class="font-bold text-xl mb-4 border-b pb-2">Header & Hero Settings</h2>
                     
@@ -302,6 +355,7 @@ if ($is_logged_in) {
 
             <div id="about" class="tab-content hidden">
                 <form method="POST" enctype="multipart/form-data" class="card p-6 space-y-4">
+                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                     <input type="hidden" name="action" value="update_section"><input type="hidden" name="section_name" value="Doctors">
                     <h2 class="font-bold text-xl mb-4 border-b pb-2">Doctors Section</h2>
                     
@@ -334,6 +388,7 @@ if ($is_logged_in) {
 
             <div id="srv" class="tab-content hidden">
                 <form method="POST" enctype="multipart/form-data" class="card p-6 rounded shadow">
+                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                     <input type="hidden" name="action" value="update_section"><input type="hidden" name="section_name" value="Services">
                     <h2 class="font-bold text-xl mb-6 border-b pb-2">Service Details</h2>
 
@@ -375,6 +430,7 @@ if ($is_logged_in) {
 
             <div id="ba" class="tab-content hidden">
                 <form method="POST" enctype="multipart/form-data" class="card p-6 rounded shadow">
+                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                     <input type="hidden" name="action" value="update_section"><input type="hidden" name="section_name" value="Gallery">
                     <h2 class="font-bold text-xl mb-4 border-b pb-2">Before & After Gallery</h2>
                     <p class="text-xs text-slate-500 mb-4">Required Image Size: 800px x 300px (8:3 Aspect Ratio)</p>
@@ -414,6 +470,7 @@ if ($is_logged_in) {
             </div>
             <div id="rev" class="tab-content hidden">
                 <form method="POST" class="card p-6 space-y-4">
+                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                     <input type="hidden" name="action" value="update_section"><input type="hidden" name="section_name" value="Reviews">
                     <h2 class="font-bold text-xl mb-4 border-b pb-2">Reviews Management</h2>
                     
@@ -441,6 +498,7 @@ if ($is_logged_in) {
 
             <div id="foot" class="tab-content hidden">
                 <form method="POST" class="card p-6 space-y-4">
+                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                     <input type="hidden" name="action" value="update_section"><input type="hidden" name="section_name" value="Footer">
                     <h2 class="font-bold text-xl mb-4 border-b pb-2">Footer & Contact</h2>
                     

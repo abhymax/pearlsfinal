@@ -1,9 +1,16 @@
 <?php
 // 1. SECURE SESSION HANDLING
 $sess_folder = __DIR__ . '/my_sessions';
-if (!file_exists($sess_folder)) { mkdir($sess_folder, 0777, true); }
+
+// FIX: Changed permissions to 0700 (Owner only) for security
+if (!file_exists($sess_folder)) { mkdir($sess_folder, 0700, true); }
+
 ini_set('session.save_path', $sess_folder);
 ini_set('session.gc_maxlifetime', 86400);
+
+// FIX: Prevent JavaScript from accessing session cookies (Mitigates XSS attacks)
+ini_set('session.cookie_httponly', 1); 
+
 session_set_cookie_params(86400);
 session_start();
 
@@ -140,5 +147,10 @@ $site = array_merge($defaults, $site);
 function val($key) { 
     global $site; 
     return isset($site[$key]) ? $site[$key] : ''; 
+}
+
+// NEW: Helper to get SECURE value for HTML (Prevents XSS)
+function esc($key) {
+    return htmlspecialchars(val($key), ENT_QUOTES, 'UTF-8');
 }
 ?>

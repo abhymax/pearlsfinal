@@ -148,7 +148,9 @@
     const dict={en:{home:"Home",about:"About",services:"Departments",reviews:"Reviews",book:"Book Appointment",book_visit:"Book Your Visit",hero_h1:"Advanced Dentistry",hero_sub:"Reimagined.",meet_experts:"Meet The Experts",team_k:"Our Team",comp_care:"Comprehensive Dental Care"},hi:{home:"होम",about:"परिचय",services:"विभाग",reviews:"समीक्षाएं",book:"अपॉइंटमेंट बुक करें",book_visit:"यात्रा बुक करें",hero_h1:"उन्नत दंत चिकित्सा",hero_sub:"पुनर्कल्पित।",meet_experts:"विशेषज्ञों से मिलें",team_k:"हमारी टीम",comp_care:"व्यापक दंत चिकित्सा"},bn:{home:"হোম",about:"পরিচয়",services:"বিভাগ",reviews:"পর্যালোচনা",book:"অ্যাপয়েন্টমেন্ট বুক করুন",book_visit:"বুকিং করুন",hero_h1:"উন্নত দন্তচিকিৎসা",hero_sub:"পুনঃকল্পিত।",meet_experts:"বিশেষজ্ঞদের সাথে দেখা করুন",team_k:"আমাদের দল",comp_care:"বিস্তৃত ডেন্টাল কেয়ার"}};
     function changeLang(l){document.querySelectorAll('[data-k]').forEach(e=>{if(dict[l][e.dataset.k])e.innerText=dict[l][e.dataset.k]})}
     function switchBA(c,b){document.querySelectorAll('.ba-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById('img-before').src=b.dataset.b;document.getElementById('img-after').src=b.dataset.a}
-    const s=document.getElementById('ba-slider'),o=document.getElementById('ba-overlay'),h=document.getElementById('ba-handle');let d=false;function m(e){if(!d)return;const r=s.getBoundingClientRect(),x=Math.max(0,Math.min((e.clientX||e.touches[0].clientX)-r.left,r.width)),p=(x/r.width)*100;o.style.width=p+"%";h.style.left=p+"%"}s.addEventListener('mousedown',()=>d=true);window.addEventListener('mouseup',()=>d=false);s.addEventListener('mousemove',m);s.addEventListener('touchmove',m);
+    
+    // REMOVED THE BROKEN SLIDER CODE FROM HERE
+    // It is already handled in includes/gallery.php
     
     // UPDATED MODAL LOGIC
     function openModal(t){
@@ -158,17 +160,18 @@
         if(t==='offer'){
             document.getElementById('offer-msg').classList.remove('hidden');
             document.getElementById('modal-title').innerText="Claim 20% Discount";
-            sourceInput.value = "Offer Claim"; // Set Source to Offer
+            sourceInput.value = "Offer Claim"; 
         } else {
             document.getElementById('offer-msg').classList.add('hidden');
             document.getElementById('modal-title').innerText="Book Appointment";
-            sourceInput.value = "General Booking"; // Set Source to General
+            sourceInput.value = "General Booking"; 
         }
     }
     function closeModal(){document.getElementById('modal').classList.add('hidden')}
     
+    // THIS LISTENER WAS FAILING TO ATTACH BEFORE. NOW IT WILL WORK.
     document.getElementById('bookForm').addEventListener('submit', function(e) {
-        e.preventDefault();
+        e.preventDefault(); // Stop page reload
         const btn = this.querySelector('button[type="submit"]');
         const originalText = btn.innerHTML;
         btn.innerHTML = '<span class="animate-spin material-symbols-outlined">refresh</span> Processing...';
@@ -186,7 +189,10 @@
                 alert("❌ Error: " + data.message); 
             }
         })
-        .catch(error => { alert("Connection Error."); })
+        .catch(error => { 
+            console.error("Fetch error:", error);
+            alert("Connection Error. Please try again."); 
+        })
         .finally(() => { 
             btn.innerHTML = originalText; 
             btn.disabled = false;
