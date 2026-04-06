@@ -181,11 +181,9 @@
         fetch('api.php', { method: 'POST', body: formData })
         .then(response => response.json())
         .then(data => {
-            if(data.status === 'success') { 
-                alert("✅ " + data.message); 
-                this.reset(); 
-                closeModal(); 
-            } else { 
+            if(data.status === 'success') {
+                window.location.href = 'thank-you.php';
+            } else {
                 alert("❌ Error: " + data.message); 
             }
         })
