@@ -11,12 +11,18 @@
         h1, h2, h3 { font-family: 'Exo 2', sans-serif; }
     </style>
 
-    <!-- ================================================
-         GOOGLE ADS CONVERSION TRACKING
-         Paste your Google Ads conversion snippet below.
-         Get it from: Google Ads > Goals > Conversions > your conversion > Tag setup > Use Google Tag
-         ================================================ -->
-    <!-- Google tag (gtag.js) - PASTE YOUR SNIPPET HERE -->
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18021518285"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'AW-18021518285');
+    </script>
+    <!-- Event snippet for Book appointment conversion page -->
+    <script>
+        gtag('event', 'conversion', {'send_to': 'AW-18021518285/hAESCJ-3vpYcEM2XqpFD'});
+    </script>
 
 
 </head>
